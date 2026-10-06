@@ -1,5 +1,6 @@
 package com.example.multitimer
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.widget.Button
@@ -8,6 +9,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.multitimer.util.TimerStore
 
 class MainActivity : AppCompatActivity() {
 
@@ -25,11 +27,34 @@ class MainActivity : AppCompatActivity() {
             items[position].timer?.cancel()
             items.removeAt(position)
             adapter.notifyItemRemoved(position)
+            TimerStore.save(this, items)   // 删除后保存
         }
         recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = adapter
 
         btnAdd.setOnClickListener { showAddDialog() }
+
+        restoreTimers()   // 重开 App 恢复
+    }
+
+    // 恢复：算剩余时间，重建计时器
+    @SuppressLint("NotifyDataSetChanged")
+    private fun restoreTimers() {
+        val saved = TimerStore.load(this)
+        val now = System.currentTimeMillis()
+
+        saved.forEach { item ->
+            var remaining = item.endTime - now
+            if (remaining <= 0) {
+                // 已经结束的，直接跳过（或你想保留就改成显示 00:00）
+//                return@forEach
+                remaining = 0
+            }
+            item.remainingMillis = remaining
+            items.add(item)
+            startTimer(item, remaining)
+        }
+        adapter.notifyDataSetChanged()
     }
 
     private fun showAddDialog() {
@@ -51,11 +76,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun addTimer(name: String, minutes: Long) {
         val totalMillis = minutes * 60 * 1000
-        val item = TimerItem(name, totalMillis, totalMillis)
+        val endTime = System.currentTimeMillis() + totalMillis
+
+        val item = TimerItem(name, totalMillis, totalMillis, endTime)
         items.add(item)
         adapter.notifyItemInserted(items.size - 1)
 
-        item.timer = object : CountDownTimer(totalMillis, 1000) {
+        startTimer(item, totalMillis)
+        TimerStore.save(this, items)   // 新增后保存
+    }
+
+    // 抽出来，新增和恢复都用
+    private fun startTimer(item: TimerItem, durationMillis: Long) {
+        item.timer = object : CountDownTimer(durationMillis, 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 item.remainingMillis = millisUntilFinished
                 val index = items.indexOf(item)
@@ -66,7 +99,7 @@ class MainActivity : AppCompatActivity() {
                 item.remainingMillis = 0
                 val index = items.indexOf(item)
                 if (index >= 0) adapter.notifyItemChanged(index)
-                // 下一步加通知
+                TimerStore.save(this@MainActivity, items)  // 结束后也存
             }
         }.start()
     }

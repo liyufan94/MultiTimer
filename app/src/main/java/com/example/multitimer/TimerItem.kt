@@ -5,7 +5,8 @@ import android.os.CountDownTimer
 class TimerItem(
     val name: String,
     var remainingMillis: Long,
-    val totalMillis: Long
+    val totalMillis: Long,
+    var endTime: Long = 0L
 ) {
     var timer: CountDownTimer? = null
 
@@ -15,6 +16,5 @@ class TimerItem(
         val sec = totalSec % 60
         return "%02d:%02d".format(min, sec)
     }
-
 
 }
